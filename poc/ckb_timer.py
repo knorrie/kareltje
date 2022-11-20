@@ -23,6 +23,7 @@
 
 import datetime
 import sys
+import time
 from collections import namedtuple
 
 
@@ -52,6 +53,7 @@ keys = [
 ]
 
 ckb_cmd_pipe_path = '/dev/input/ckb1/cmd'
+update_interval = 60
 
 
 def ckb_cmd(key, seconds):
@@ -78,9 +80,13 @@ def ckb_cmd_write(target, lines):
 
 def main():
     end_time = datetime.datetime.fromisoformat(sys.argv[1])  # e.g. '2022-11-20T18:00'
-    now = datetime.datetime.now()
-    remaining_seconds = (end_time - now).total_seconds()
-    ckb_cmd_write(ckb_cmd_pipe_path, timer_commands(keys, remaining_seconds))
+    while True:
+        now = datetime.datetime.now()
+        remaining_seconds = (end_time - now).total_seconds()
+        ckb_cmd_write(ckb_cmd_pipe_path, timer_commands(keys, remaining_seconds))
+        time.sleep(remaining_seconds % update_interval)
+        if now > end_time:
+            break
 
 
 if __name__ == '__main__':
