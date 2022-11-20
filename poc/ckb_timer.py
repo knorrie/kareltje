@@ -21,6 +21,7 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+import datetime
 import sys
 from collections import namedtuple
 
@@ -76,7 +77,9 @@ def ckb_cmd_write(target, lines):
 
 
 def main():
-    remaining_seconds = int(sys.argv[1])
+    end_time = datetime.datetime.fromisoformat(sys.argv[1])  # e.g. '2022-11-20T18:00'
+    now = datetime.datetime.now()
+    remaining_seconds = (end_time - now).total_seconds()
     ckb_cmd_write(ckb_cmd_pipe_path, timer_commands(keys, remaining_seconds))
 
 
