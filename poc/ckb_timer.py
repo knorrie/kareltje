@@ -22,9 +22,12 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import datetime
-import sys
+import os
+import pwd
 import time
+import yaml
 from collections import namedtuple
+from todoist_api_python.api import TodoistAPI
 
 
 RGB = namedtuple('RGB', ['r', 'g', 'b'])
@@ -54,6 +57,7 @@ keys = [
 
 ckb_cmd_pipe_path = '/dev/input/ckb1/cmd'
 update_interval = 60
+todoist_poll_interval = 900
 
 
 def ckb_cmd(key, seconds):
@@ -78,15 +82,48 @@ def ckb_cmd_write(target, lines):
             print(line, file=f)
 
 
-def main():
-    end_time = datetime.datetime.fromisoformat(sys.argv[1])  # e.g. '2022-11-20T18:00'
+def do_timer(end_time):
     while True:
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
         remaining_seconds = (end_time - now).total_seconds()
         ckb_cmd_write(ckb_cmd_pipe_path, timer_commands(keys, remaining_seconds))
         if now > end_time:
             break
         time.sleep(remaining_seconds % update_interval)
+
+
+def get_next_timer_task(api):
+    tasks = api.get_tasks(filter='@timer & due before: +4 hours')
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    for task in sorted(tasks, key=lambda _: _.due.datetime):
+        # todoist uses RFC3339 UTC, e.g. '2022-11-28T12:00:00Z'
+        # datetime can't do Z, so swap it with zero offset
+        end_time = datetime.datetime.fromisoformat(task.due.datetime[:-1] + '+00:00')
+        if end_time > now:
+            return end_time, task
+    return None, None
+
+
+def do_todoist_timer(token):
+    api = TodoistAPI(token)
+    while True:
+        end_time, task = get_next_timer_task(api)
+        if task is not None:
+            do_timer(end_time)
+        else:
+            now = datetime.datetime.now(tz=datetime.timezone.utc)
+            time.sleep(todoist_poll_interval - (now.timestamp() % todoist_poll_interval))
+
+
+def load_config():
+    homedir = pwd.getpwuid(os.getuid())[5]
+    poc_config_file = os.path.join(homedir, '.config/kareltje/poc.yaml')
+    with open(poc_config_file) as f:
+        return yaml.safe_load(f.read())
+
+
+def main():
+    do_todoist_timer(load_config()['timer']['todoist']['token'])
 
 
 if __name__ == '__main__':
